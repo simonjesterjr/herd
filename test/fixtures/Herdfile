@@ -1,0 +1,15 @@
+workflow :test do
+  job :first do
+    command "echo 'First job'"
+  end
+
+  job :second do
+    command "echo 'Second job'"
+    depends_on :first
+  end
+
+  job :third do
+    command "echo 'Third job'"
+    depends_on :second
+  end
+end 
