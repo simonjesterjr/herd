@@ -62,7 +62,7 @@ class Herd::Client
 
     loop do
       job_id = SecureRandom.uuid
-      available = !redis.with { |conn| conn.hexists("clockworx.jobs.#{workflow_id}.#{job_klass}", job_id) }
+      available = !redis.with { |conn| conn.hexists("herd.jobs.#{workflow_id}.#{job_klass}", job_id) }
 
       break if available
     end
@@ -74,7 +74,7 @@ class Herd::Client
     id = nil
     loop do
       id = SecureRandom.uuid
-      available = !redis.with { |conn| conn.exists?("clockworx.workflow.#{id}") }
+      available = !redis.with { |conn| conn.exists?("herd.workflow.#{id}") }
 
       break if available
     end
@@ -83,18 +83,18 @@ class Herd::Client
   end
 
   def all_workflows
-    redis.with { |conn| conn.scan_each(match: "clockworx.workflows.*") }.each do |key|
-      id = key.sub("clockworx.workflows.", "")
+    redis.with { |conn| conn.scan_each(match: "herd.workflows.*") }.each do |key|
+      id = key.sub("herd.workflows.", "")
       find_workflow(id)
     end.map
   end
 
   def find_workflow(id)
-    data = redis.with { |conn| conn.get("clockworx.workflows.#{id}") }
+    data = redis.with { |conn| conn.get("herd.workflows.#{id}") }
     raise ::Herd::WorkflowNotFound, "Workflow with given id ( #{id} ) doesn't exist" if data.nil?
 
     hash = Herd::JSON.decode(data, symbolize_keys: true)
-    keys = redis.with { |conn| conn.scan_each(match: "clockworx.jobs.#{id}.*") }
+    keys = redis.with { |conn| conn.scan_each(match: "herd.jobs.#{id}.*") }
     nodes = keys.each_with_object([]) do |key, array|
       array.concat redis.with { |conn| conn.hvals(key).map { |json| Herd::JSON.decode(json, symbolize_keys: true) } }
     end
@@ -103,7 +103,7 @@ class Herd::Client
   end
 
   def persist_workflow(workflow)
-    redis.with { |conn| conn.set("clockworx.workflows.#{workflow.id}", workflow.to_json) }
+    redis.with { |conn| conn.set("herd.workflows.#{workflow.id}", workflow.to_json) }
 
     workflow.jobs.each { |job| persist_job(workflow.id, job) }
     workflow.mark_as_persisted
@@ -116,7 +116,7 @@ class Herd::Client
   end
 
   def persist_job(workflow_id, job)
-    redis.with { |conn| conn.hset("clockworx.jobs.#{workflow_id}.#{job.klass}", job.id, job.to_json) }
+    redis.with { |conn| conn.hset("herd.jobs.#{workflow_id}.#{job.klass}", job.id, job.to_json) }
   end
 
   def find_job(workflow_id, job_name)
@@ -135,23 +135,23 @@ class Herd::Client
   end
 
   def destroy_workflow(workflow)
-    redis.with { |conn| conn.del("clockworx.workflows.#{workflow.id}") }
+    redis.with { |conn| conn.del("herd.workflows.#{workflow.id}") }
     workflow.jobs.each { |job| destroy_job(workflow.id, job) }
   end
 
   def destroy_job(workflow_id, job)
-    redis.with { |conn| conn.del("clockworx.jobs.#{workflow_id}.#{job.klass}") }
+    redis.with { |conn| conn.del("herd.jobs.#{workflow_id}.#{job.klass}") }
   end
 
   def expire_workflow(workflow, ttl = nil)
     ttl ||= configuration.ttl
-    redis.with { |conn| conn.expire("clockworx.workflows.#{workflow.id}", ttl) }
+    redis.with { |conn| conn.expire("herd.workflows.#{workflow.id}", ttl) }
     workflow.jobs.each { |job| expire_job(workflow.id, job, ttl) }
   end
 
   def expire_job(workflow_id, job, ttl = nil)
     ttl ||= configuration.ttl
-    redis.with { |conn| conn.expire("clockworx.jobs.#{workflow_id}.#{job.klass}", ttl) }
+    redis.with { |conn| conn.expire("herd.jobs.#{workflow_id}.#{job.klass}", ttl) }
   end
 
   def enqueue_job(workflow_id, job)
@@ -170,11 +170,11 @@ class Herd::Client
     def find_job_by_klass_and_id(workflow_id, job_name)
       job_klass, job_id = job_name.split('|')
 
-      redis.with { |conn| conn.hget("clockworx.jobs.#{workflow_id}.#{job_klass}", job_id) }
+      redis.with { |conn| conn.hget("herd.jobs.#{workflow_id}.#{job_klass}", job_id) }
     end
 
     def find_job_by_klass(workflow_id, job_name)
-      new_cursor, result = redis.with { |conn| conn.hscan("clockworx.jobs.#{workflow_id}.#{job_name}", 0, count: 1) }
+      new_cursor, result = redis.with { |conn| conn.hscan("herd.jobs.#{workflow_id}.#{job_name}", 0, count: 1) }
       return nil if result.empty?
 
       job_id, job = *result[0]

@@ -7,14 +7,14 @@ require 'launchy'
 
 module Herd
   class CLI < Thor
-    class_option :clockworxfile, desc: "configuration file to use", aliases: "-f"
+    class_option :herdfile, desc: "configuration file to use", aliases: "-f"
     class_option :redis, desc: "Redis URL to use", aliases: "-r"
     class_option :namespace, desc: "namespace to run jobs in", aliases: "-n"
 
     def initialize(*)
       super
       Herd.configure do |config|
-        config.clockworxfile           = options.fetch("clockworxfile",         config.clockworxfile)
+        config.herdfile                = options.fetch("herdfile",              config.herdfile)
         config.concurrency             = options.fetch("concurrency",           config.concurrency)
         config.redis_url               = options.fetch("redis",                 config.redis_url)
         config.namespace               = options.fetch("namespace",             config.namespace)
@@ -22,14 +22,14 @@ module Herd
         config.locking_duration        = options.fetch("locking_duration",      config.locking_duration)
         config.polling_interval        = options.fetch("polling_interval",      config.polling_interval)
       end
-      load_clockworxfile
+      load_herdfile
     end
 
     desc "create WORKFLOW_CLASS", "Registers new workflow"
     def create(name)
       workflow = client.create_workflow(name)
       puts "Workflow created with id: #{workflow.id}"
-      puts "Start it with command: clockworx start #{workflow.id}"
+      puts "Start it with command: herd start #{workflow.id}"
     end
 
     desc "start WORKFLOW_ID [ARG ...]", "Starts Workflow with given ID"
@@ -155,14 +155,14 @@ module Herd
       puts overview(workflow).jobs_list(jobs)
     end
 
-    def clockworxfile
-      Herd.configuration.clockworxfile
+    def herdfile
+      Herd.configuration.herdfile
     end
 
-    def load_clockworxfile
-      file = client.configuration.clockworxfile
+    def load_herdfile
+      file = client.configuration.herdfile
 
-      unless clockworxfile.exist?
+      unless herdfile.exist?
         raise Thor::Error, Paint["#{file} not found, please add it to your project", :red]
       end
 

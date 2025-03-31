@@ -155,7 +155,7 @@ module Herd
       def assign_variables(opts)
         @id             = opts[:id]
         @klass          = opts[:klass] || self.class
-        @queue          = opts[:queue] || 'clockworx'
+        @queue          = opts[:queue] || 'herd'
         @incoming       = opts[:incoming] || []
         @outgoing       = opts[:outgoing] || []
         @finished_at    = opts[:finished_at]
