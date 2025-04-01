@@ -117,7 +117,7 @@ class Herd::ClientTest < Herd::TestCase
   end
 
   def test_persist_job_persists_json_dump_in_redis
-    job = Herd::Runner.new(klass: BobJob.new, proxy_class: "TestPartition")
+    job = Herd::Runner.new(klass: BobJob.new, proxy_class: "TestProxy}")
     @client.persist_job("deadbeef", job)
     assert_equal 1, redis.keys("herd.jobs.deadbeef.*").length
   end
@@ -140,6 +140,92 @@ class Herd::ClientTest < Herd::TestCase
       workflow = @client.find_workflow(workflow.id)
       refute workflow.stopped?
     end
+  end
+
+  def test_client_finds_workflow
+    workflow = TestWorkflow.create
+    found = @client.find_workflow(workflow.id)
+    assert_equal workflow.id, found.id
+  end
+
+  def test_client_finds_proxy
+    proxy = TestProxy.create
+    found = @client.find_proxy(proxy.id)
+    assert_equal proxy.id, found.id
+  end
+
+  def test_client_persists_workflow
+    workflow = TestWorkflow.new
+    @client.persist_workflow(workflow)
+    assert workflow.persisted
+  end
+
+  def test_client_persists_proxy
+    proxy = TestProxy.new
+    @client.persist_proxy(proxy)
+    assert proxy.persisted
+  end
+
+  def test_client_destroys_workflow
+    workflow = TestWorkflow.create
+    @client.destroy_workflow(workflow)
+    assert_raises(Herd::WorkflowNotFound) do
+      @client.find_workflow(workflow.id)
+    end
+  end
+
+  def test_client_destroys_proxy
+    proxy = TestProxy.create
+    @client.destroy_proxy(proxy)
+    assert_raises(Herd::ProxyNotFound) do
+      @client.find_proxy(proxy.id)
+    end
+  end
+
+  def test_client_all_workflows
+    workflow1 = TestWorkflow.create
+    workflow2 = TestWorkflow.create
+    workflows = @client.all_workflows
+    assert_equal 2, workflows.size
+    assert_includes workflows.map(&:id), workflow1.id
+    assert_includes workflows.map(&:id), workflow2.id
+  end
+
+  def test_client_all_proxies
+    proxy1 = TestProxy.create
+    proxy2 = TestProxy.create
+    proxies = @client.all_proxies
+    assert_equal 2, proxies.size
+    assert_includes proxies.map(&:id), proxy1.id
+    assert_includes proxies.map(&:id), proxy2.id
+  end
+
+  def test_client_finds_workflow_by_job_id
+    workflow = TestWorkflow.create
+    job = workflow.find_job(PrepareJob)
+    found = @client.find_workflow_by_job_id(job.id)
+    assert_equal workflow.id, found.id
+  end
+
+  def test_client_finds_proxy_by_job_id
+    proxy = TestProxy.create
+    job = proxy.find_job(PrepareJob)
+    found = @client.find_proxy_by_job_id(job.id)
+    assert_equal proxy.id, found.id
+  end
+
+  def test_client_finds_workflow_by_proxy_id
+    workflow = TestWorkflow.create
+    proxy = TestProxy.create(parent_id: workflow.id)
+    found = @client.find_workflow_by_proxy_id(proxy.id)
+    assert_equal workflow.id, found.id
+  end
+
+  def test_client_finds_proxy_by_proxy_id
+    proxy = TestProxy.create
+    child = TestProxy.create(parent_id: proxy.id)
+    found = @client.find_proxy_by_proxy_id(child.id)
+    assert_equal proxy.id, found.id
   end
 
   private

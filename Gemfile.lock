@@ -56,6 +56,8 @@ GEM
       connection_pool
     redis-namespace (1.11.0)
       redis (>= 4)
+    redlock (2.0.6)
+      redis-client (>= 0.14.1, < 1.0.0)
     reline (0.6.0)
       io-console (~> 0.5)
     sidekiq (7.3.9)
@@ -87,6 +89,7 @@ DEPENDENCIES
   rake (~> 13.0)
   redis (~> 5.0)
   redis-classy (~> 2.4.1)
+  redlock
   sidekiq (~> 7.2)
   terminal-table (~> 3.0)
   thor (~> 1.3)

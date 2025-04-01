@@ -1,15 +1,21 @@
 # Herd
 
-Herd is a powerful workflow management system that helps you organize and execute complex workflows. It provides a robust framework for defining, managing, and executing workflows with dependencies, making it perfect for complex task orchestration.
+A powerful workflow management system for Ruby applications.
+
+## Overview
+
+Herd is a workflow management system that helps you coordinate and execute complex job sequences. It provides a robust framework for managing job dependencies, parallel execution, and state persistence.
 
 ## Features
 
-- Workflow definition and management
-- Dependency handling
-- Redis-based job queue
-- Graph visualization of workflows
-- CLI interface for workflow management
-- JSON-based workflow configuration
+- **Workflow Management**: Create and manage complex job workflows
+- **Job Dependencies**: Define job dependencies and execution order
+- **Parallel Execution**: Run jobs in parallel using proxies
+- **State Persistence**: Store workflow state in PostgreSQL
+- **Job Queue**: Manage job execution through Redis and Sidekiq
+- **Tracking System**: Monitor workflow and job execution
+- **Error Handling**: Robust error handling and retry mechanisms
+- **Configuration**: Flexible configuration options
 
 ## Installation
 
@@ -25,160 +31,81 @@ And then execute:
 $ bundle install
 ```
 
-Or install it yourself as:
-
-```bash
-$ gem install herd
-```
-
-## Usage
-
-### Basic Configuration
+## Quick Start
 
 ```ruby
-require 'herd'
+# Define a workflow
+class MyWorkflow < Herd::Workflow
+  def configure
+    run PrepareJob
+    run FetchDataJob, after: PrepareJob
+    run ProcessDataJob, after: FetchDataJob
+    run SaveDataJob, after: ProcessDataJob
+  end
+end
 
+# Create and run a workflow
+workflow = MyWorkflow.create
+workflow.run
+```
+
+## Documentation
+
+For detailed documentation, please visit our [documentation site](doc/README.md):
+
+- [Architecture Overview](doc/architecture/overview.md)
+- [Core Components](doc/architecture/components.md)
+- [Data Storage](doc/architecture/storage.md)
+- [Process Flows](doc/architecture/flows.md)
+- [Configuration Guide](doc/configuration/README.md)
+- [API Reference](doc/api/README.md)
+- [Development Guide](doc/development/README.md)
+
+## Architecture
+
+Herd uses a hybrid storage approach:
+- Redis for job management and queues
+- PostgreSQL for state persistence and tracking
+
+### System Components
+
+```mermaid
+graph TB
+    Client[Client] --> Workflow[Workflow Engine]
+    Workflow --> JobManager[Job Manager]
+    Workflow --> ProxyManager[Proxy Manager]
+    JobManager --> Redis[(Redis)]
+    ProxyManager --> PostgreSQL[(PostgreSQL)]
+    Workflow --> Tracking[Tracking System]
+    Tracking --> PostgreSQL
+```
+
+## Configuration
+
+Configure Herd in your application:
+
+```ruby
 Herd.configure do |config|
-  config.redis_url = 'redis://localhost:6379/0'
-  config.herdfile = 'Herdfile'
+  config.redis_url = "redis://localhost:6379/1"
+  config.database_url = "postgresql://localhost:5432/herd"
+  config.log_level = :info
+  config.job_timeout = 30
+  config.max_retries = 5
+  config.enable_tracking = true
 end
-```
-
-### Defining a Workflow
-
-```ruby
-# Herdfile
-workflow :deploy do
-  job :build do
-    command 'bundle exec rake build'
-  end
-
-  job :test do
-    command 'bundle exec rake test'
-    depends_on :build
-  end
-
-  job :deploy do
-    command 'bundle exec rake deploy'
-    depends_on :test
-  end
-end
-```
-
-### Running Workflows
-
-```bash
-$ herd run deploy
 ```
 
 ## Development
 
-### Prerequisites
-
-- Ruby 2.6.0 or higher
-- Redis server running locally (or accessible via network)
-- Graphviz (for workflow visualization)
-
-### Local Development Setup
-
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/herd.git
-cd herd
-```
-
-2. Install dependencies:
-```bash
-bundle install
-```
-
-3. Run the tests:
-```bash
-bundle exec rake test
-```
-
-### Working with the Gem Locally
-
-There are several ways to work with the gem during development:
-
-1. **Using Bundler's Local Path**
-   Add this to your application's Gemfile:
-   ```ruby
-   gem 'herd', path: '/path/to/herd'
-   ```
-   Then run `bundle install`. This will use the local version of the gem.
-
-2. **Building and Installing the Gem**
-   ```bash
-   # Build the gem
-   gem build herd.gemspec
-   
-   # Install it locally
-   gem install ./herd-0.1.0.gem
-   ```
-
-3. **Using Bundler's Git Source**
-   Add this to your application's Gemfile:
-   ```ruby
-   gem 'herd', git: 'https://github.com/yourusername/herd.git'
-   ```
-   Then run `bundle install`.
-
-### Running Tests
-
-The tests can be run without building the gem by using Bundler's local path feature. The test suite is set up to load the gem directly from the source code.
-
-1. **Run all tests:**
-   ```bash
-   bundle exec rake test
-   ```
-
-2. **Run specific test file:**
-   ```bash
-   bundle exec ruby -I test test/herd/workflow_test.rb
-   ```
-
-3. **Run with specific test:**
-   ```bash
-   bundle exec ruby -I test test/herd/workflow_test.rb -n test_status_returns_failed_when_failed
-   ```
-
-### Test Dependencies
-
-The test suite requires:
-- Redis running locally (or accessible via network)
-- Sidekiq (for job queue testing)
-- Minitest (included in Ruby standard library)
-
-### Debugging
-
-To debug the gem locally:
-
-1. Add the `debug` gem to your Gemfile:
-   ```ruby
-   gem 'debug'
-   ```
-
-2. Add breakpoints in your code:
-   ```ruby
-   require 'debug'
-   debugger
-   ```
-
-3. Run your tests or code with the debugger:
-   ```bash
-   bundle exec ruby -I test test/herd/workflow_test.rb
-   ```
+After checking out the repo, run `bundle install` to install dependencies. Then, run `rake test` to run the tests.
 
 ## Contributing
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -am 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-Bug reports and pull requests are welcome on GitHub.
+1. Fork it
+2. Create your feature branch (`git checkout -b my-new-feature`)
+3. Commit your changes (`git commit -am 'Add some feature'`)
+4. Push to the branch (`git push origin my-new-feature`)
+5. Create new Pull Request
 
 ## License
 

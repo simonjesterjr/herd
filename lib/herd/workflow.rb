@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'securerandom'
 
 class Herd::Workflow
@@ -13,6 +15,7 @@ class Herd::Workflow
     @stopped = false
     @parallel_workflows = false
     @arguments = args
+    @model = nil
 
     setup
   end
@@ -51,13 +54,11 @@ class Herd::Workflow
 
   def mark_as_stopped
     @stopped = true
+    model.mark_as_stopped
+    add_note("Workflow stopped", level: 'warning')
   end
 
   def start!
-    # TODO: need a way to finalize or finish or delete un-run workflows
-    # msg = "#{name} is already running in another process"
-    # raise Herd::SameWorkflowRunning, msg if same_workflow_running?
-
     client.start_workflow(self)
   end
 
@@ -65,7 +66,7 @@ class Herd::Workflow
     client.persist_workflow(self)
   end
 
-  def expire!( ttl = nil )
+  def expire!(ttl = nil)
     client.expire_workflow(self, ttl)
   end
 
@@ -75,6 +76,8 @@ class Herd::Workflow
 
   def mark_as_started
     @stopped = false
+    model.mark_as_started
+    add_note("Workflow started", level: 'info')
   end
 
   def resolve_dependencies
@@ -108,7 +111,7 @@ class Herd::Workflow
   end
 
   def finished?
-    jobs.all?(&:finished?)
+    jobs.all?(&:finished?) && model.finished?
   end
 
   def started?
@@ -121,73 +124,76 @@ class Herd::Workflow
   end
 
   def failed?
-    jobs.any?(&:failed?)
+    jobs.any?(&:failed?) || model.failed?
   end
 
   def stopped?
-    stopped
+    stopped || model.stopped?
   end
 
   def run(klass, opts = {})
-    node = Herd::Runner.new( { klass: klass,
-                                    transaction_id: opts[:xact_id],
-                                    proxy_class: opts[:proxy_class],
-                                    proxy_namespace: opts[:proxy_namespace] || "Herd",
-                                    workflow_id: id,
-                                    id: client.next_free_job_id(id, klass.to_s),
-                                    params: opts.fetch(:params, {}),
-                                    queue: opts[:queue],
-                                    skip: opts[:skip] || false } )
+    node = Herd::Runner.new(
+      {
+        klass: klass,
+        transaction_id: opts[:xact_id],
+        proxy_class: opts[:proxy_class] || "Herd::Proxy",
+        proxy_namespace: opts[:proxy_namespace] || "Herd",
+        workflow_id: id,
+        id: client.next_free_job_id(id, klass.to_s),
+        params: opts.fetch(:params, {}),
+        queue: opts[:queue],
+        skip: opts[:skip] || false
+      }
+    )
     jobs << node
     proxies << node.proxy
 
     deps_after = [*opts[:after]]
-
     deps_after.each do |dep|
       @dependencies << { from: dep.to_s, to: node.name.to_s }
     end
 
     deps_before = [*opts[:before]]
-
     deps_before.each do |dep|
       @dependencies << { from: node.name.to_s, to: dep.to_s }
     end
 
+    add_note("Added job #{node.name}", metadata: { job_class: klass.to_s })
     node.name
   end
 
-  # this allows workflows to be referred to in the configurations
-  def workflow( workflow, opts = {} )
-    node = Herd::Runner.new( { workflow: workflow,
-                                    transaction_id: opts[:xact_id],
-                                    workflow_id: id,
-                                    id: client.next_free_job_id(id, workflow.to_s),
-                                    args: opts.fetch(:args, []) } )
+  def workflow(workflow, opts = {})
+    node = Herd::Runner.new(
+      {
+        workflow: workflow,
+        transaction_id: opts[:xact_id],
+        workflow_id: id,
+        id: client.next_free_job_id(id, workflow.to_s),
+        args: opts.fetch(:args, [])
+      }
+    )
 
     jobs << node
 
     deps_after = [*opts[:after]]
-
     deps_after.each do |dep|
       @dependencies << { from: dep.to_s, to: node.name.to_s }
     end
 
     deps_before = [*opts[:before]]
-
     deps_before.each do |dep|
       @dependencies << { from: node.name.to_s, to: dep.to_s }
     end
 
+    add_note("Added workflow #{workflow}", metadata: { workflow_class: workflow.to_s })
     node.name
   end
 
   def reload
     flow = self.class.find(id)
-
     self.jobs = flow.jobs
     self.proxies = flow.proxies
     self.stopped = flow.stopped
-
     self
   end
 
@@ -197,33 +203,32 @@ class Herd::Workflow
 
   def status
     if failed?
-        :failed
-      elsif running?
-        :running
-      elsif finished?
-        :finished
-      elsif stopped?
-        :stopped
-      else
-        :running
+      :failed
+    elsif running?
+      :running
+    elsif finished?
+      :finished
+    elsif stopped?
+      :stopped
+    else
+      :running
     end
   end
 
   def started_at
-    first_job&.started_at
+    first_job&.started_at || model.started_at
   end
 
   def finished_at
-    last_job&.finished_at
+    last_job&.finished_at || model.finished_at
   end
 
   def status_hash
     jobs_arr = jobs.map { |j| [j.proxy.type, j.finished?, !j.failed?, j.proxy.done?, j.proxy.completed?] }
-    to_hash.merge!( jobs: jobs_arr )
+    to_hash.merge!(jobs: jobs_arr)
   end
 
   def to_hash
-    # name = self.class.to_s
     {
       name: name,
       id: id,
@@ -270,26 +275,59 @@ class Herd::Workflow
     false
   end
 
-  def skip?( klass )
+  def skip?(klass)
     arguments[:skip_steps].include?
+  end
+
+  def add_note(note, level: 'info', metadata: {})
+    model.add_note(note, level: level, metadata: metadata)
+  end
+
+  def notes
+    model.notes
+  end
+
+  def info_notes
+    model.info_notes
+  end
+
+  def warning_notes
+    model.warning_notes
+  end
+
+  def error_notes
+    model.error_notes
   end
 
   private
 
-    def setup
-      configure(*@arguments)
-      resolve_dependencies
-    end
+  def setup
+    configure(*@arguments)
+    resolve_dependencies
+  end
 
-    def client
-      @client ||= Herd::Client.new
-    end
+  def client
+    @client ||= Herd::Client.new
+  end
 
-    def first_job
-      jobs.min_by { |n| n.started_at || Time.now.to_i }
-    end
+  def first_job
+    jobs.min_by { |n| n.started_at || Time.now.to_i }
+  end
 
-    def last_job
-      jobs.max_by { |n| n.finished_at || 0 } if finished?
-    end
+  def last_job
+    jobs.max_by { |n| n.finished_at || 0 } if finished?
+  end
+
+  def model
+    @model ||= find_or_create_model
+  end
+
+  def find_or_create_model
+    @model = Models::Workflow.find_or_create_by!(
+      id: id,
+      name: name,
+      arguments: @arguments,
+      stopped: @stopped
+    )
+  end
 end

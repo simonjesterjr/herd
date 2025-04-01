@@ -5,6 +5,7 @@ source "https://rubygems.org"
 gem "graphviz", "~> 1.3.0"
 gem "hiredis", "~> 0.6.3"
 gem "redis", "~> 5.0"
+gem 'redlock'
 gem "redis-classy", "~> 2.4.1"
 gem "oj", "~> 3.16"
 gem "sidekiq", "~> 7.2"

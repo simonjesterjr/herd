@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'redis'
 require 'redis-classy'
 require 'concurrent-ruby'
@@ -33,7 +35,6 @@ class Herd::Client
     rescue NameError
       raise WorkflowNotFound, "Workflow with given name doesn't exist"
     end
-    flow
   end
 
   def start_workflow(workflow, arguments = [], job_names = [])
@@ -83,34 +84,37 @@ class Herd::Client
   end
 
   def all_workflows
-    redis.with { |conn| conn.scan_each(match: "herd.workflows.*") }.each do |key|
-      id = key.sub("herd.workflows.", "")
-      find_workflow(id)
-    end.map
+    Models::Workflow.all.map do |workflow_model|
+      find_workflow(workflow_model.id)
+    end
   end
 
   def find_workflow(id)
-    data = redis.with { |conn| conn.get("herd.workflows.#{id}") }
-    raise ::Herd::WorkflowNotFound, "Workflow with given id ( #{id} ) doesn't exist" if data.nil?
+    workflow_model = Models::Workflow.find_by(id: id)
+    raise ::Herd::WorkflowNotFound, "Workflow with given id ( #{id} ) doesn't exist" if workflow_model.nil?
 
-    hash = Herd::JSON.decode(data, symbolize_keys: true)
+    # Get job data from Redis
     keys = redis.with { |conn| conn.scan_each(match: "herd.jobs.#{id}.*") }
     nodes = keys.each_with_object([]) do |key, array|
       array.concat redis.with { |conn| conn.hvals(key).map { |json| Herd::JSON.decode(json, symbolize_keys: true) } }
     end
 
-    workflow_from_hash(hash, nodes)
+    workflow_from_hash(workflow_model.attributes.symbolize_keys, nodes)
   end
 
   def persist_workflow(workflow)
-    redis.with { |conn| conn.set("herd.workflows.#{workflow.id}", workflow.to_json) }
+    # Persist workflow state to PostgreSQL
+    workflow.model.update!(
+      name: workflow.name,
+      arguments: workflow.arguments,
+      stopped: workflow.stopped,
+      started_at: workflow.started_at,
+      finished_at: workflow.finished_at
+    )
 
+    # Persist job data to Redis
     workflow.jobs.each { |job| persist_job(workflow.id, job) }
     workflow.mark_as_persisted
-
-    if workflow.finished?
-      # to do persist status of the workflow
-    end
 
     true
   end
@@ -135,7 +139,10 @@ class Herd::Client
   end
 
   def destroy_workflow(workflow)
-    redis.with { |conn| conn.del("herd.workflows.#{workflow.id}") }
+    # Delete workflow from PostgreSQL
+    workflow.model.destroy
+
+    # Delete job data from Redis
     workflow.jobs.each { |job| destroy_job(workflow.id, job) }
   end
 
@@ -161,45 +168,43 @@ class Herd::Client
     persist_job(workflow_id, job)
     queue = job.queue || configuration.namespace
 
-    # Herd::Worker.set(queue: queue).perform_in(10, *[workflow_id, job.name])
     job.klass.to_s.constantize.set(queue: queue).perform_in(5, *[workflow_id])
   end
 
   private
 
-    def find_job_by_klass_and_id(workflow_id, job_name)
-      job_klass, job_id = job_name.split('|')
+  def find_job_by_klass_and_id(workflow_id, job_name)
+    job_klass, job_id = job_name.split('|')
 
-      redis.with { |conn| conn.hget("herd.jobs.#{workflow_id}.#{job_klass}", job_id) }
+    redis.with { |conn| conn.hget("herd.jobs.#{workflow_id}.#{job_klass}", job_id) }
+  end
+
+  def find_job_by_klass(workflow_id, job_name)
+    new_cursor, result = redis.with { |conn| conn.hscan("herd.jobs.#{workflow_id}.#{job_name}", 0, count: 1) }
+    return nil if result.empty?
+
+    job_id, job = *result[0]
+
+    job
+  end
+
+  def workflow_from_hash(hash, nodes = [])
+    flow = Object.const_get(hash[:name]).new(*hash[:arguments])
+    flow.jobs = []
+    flow.proxies = []
+    flow.stopped = hash.fetch(:stopped, false)
+    flow.id = hash[:id]
+
+    flow.jobs = nodes.map do |node|
+      Herd::Runner.from_hash(node)
     end
 
-    def find_job_by_klass(workflow_id, job_name)
-      new_cursor, result = redis.with { |conn| conn.hscan("herd.jobs.#{workflow_id}.#{job_name}", 0, count: 1) }
-      return nil if result.empty?
+    flow.proxies = flow.jobs.map(&:proxy)
 
-      job_id, job = *result[0]
+    flow
+  end
 
-      job
-    end
-
-    def workflow_from_hash(hash, nodes = [])
-      flow = Object.const_get(hash[:klass]).new(*hash[:arguments])
-      flow.jobs = []
-      flow.proxies = []
-      flow.stopped = hash.fetch(:stopped, false)
-      flow.id = hash[:id]
-
-      flow.jobs = nodes.map do |node|
-        Herd::Runner.from_hash(node)
-      end
-
-      flow.proxies = flow.jobs.map(&:proxy)
-
-      flow
-    end
-
-    # rubocop:disable Style/ExplicitBlockArgument
-    def redis(&block)
-      self.class.redis_connection
-    end
+  def redis(&block)
+    self.class.redis_connection
+  end
 end

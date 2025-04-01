@@ -2,7 +2,7 @@
 
 module Herd
   class Configuration
-    attr_accessor :concurrency, :namespace, :redis_url, :ttl, :locking_duration, :polling_interval, :herdfile
+    attr_accessor :concurrency, :namespace, :redis_url, :ttl, :locking_duration, :polling_interval, :herdfile, :database_config
 
     def self.from_json(json)
       new(Herd::Json.decode(json, symbolize_keys: true))
@@ -16,6 +16,14 @@ module Herd
       self.ttl              = hash.fetch(:ttl, 3600 * 23.5)
       self.locking_duration = hash.fetch(:locking_duration, 2) # how long you want to wait for the lock to be released, in milliseconds
       self.polling_interval = hash.fetch(:polling_internal, 0.3) # how long the polling interval should be, in milliseconds
+      @database_config = {
+        adapter: ENV.fetch("DB_ADAPTER", "postgresql"),
+        host: ENV.fetch("DB_HOST", "localhost"),
+        port: ENV.fetch("DB_PORT", 5432),
+        database: ENV.fetch("DB_NAME", "herd_development"),
+        username: ENV.fetch("DB_USERNAME", "postgres"),
+        password: ENV.fetch("DB_PASSWORD", "postgres")
+      }
     end
 
     def herdfile=(path)
@@ -34,7 +42,8 @@ module Herd
         herdfile: herdfile,
         ttl: ttl,
         locking_duration: locking_duration,
-        polling_interval: polling_interval
+        polling_interval: polling_interval,
+        database_config: database_config
       }
     end
 

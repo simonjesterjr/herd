@@ -4,9 +4,13 @@ require "minitest/autorun"
 require "minitest/pride"
 require "hiredis"
 require "redis"
+require "redlock"
 require "sidekiq"
 require "oj"
 require "graphviz"
+require "concurrent-ruby"
+
+require_relative "support/database_helper"
 
 # Add the lib directory to the load path
 $LOAD_PATH.unshift File.expand_path("../../lib", __FILE__)
@@ -38,18 +42,38 @@ Oj.default_options = { mode: :compat }
 
 # Base test case class
 class Herd::TestCase < Minitest::Test
+  include DatabaseHelper
+
   def setup
     super
-    @redis = Redis.new(url: "redis://localhost:6379/1")
-    @redis.flushdb
+    setup_redis
+    setup_database
   end
 
   def teardown
+    cleanup_redis
+    cleanup_database
     super
-    @redis.flushdb
   end
 
   private
+
+  def setup_redis
+    @redis = Redis.new(url: ENV.fetch('REDIS_URL', 'redis://localhost:6379/1'))
+    @redis.flushdb
+  end
+
+  def cleanup_redis
+    @redis.flushdb
+  end
+
+  def setup_database
+    Herd::DatabaseSetup.setup
+  end
+
+  def cleanup_database
+    Herd::DatabaseSetup.teardown
+  end
 
   def assert_change(expected, &block)
     before = yield
@@ -69,6 +93,11 @@ class Herd::TestCase < Minitest::Test
       assert_equal before[i] + 1, after[i], error
     end
   end
+
+  def assert_match_array(expected, actual, msg = nil)
+    msg = message(msg) { "Expected #{actual.inspect} to match array #{expected.inspect}" }
+    assert_equal expected.sort, actual.sort, msg
+  end
 end
 
 # Helper module for Array operations
@@ -85,7 +114,7 @@ module ArrayWrapping
 end
 
 # Test partition classes
-class TestPartition
+class TestProxy < Herd::Proxy
   def self.create(parent_id: nil)
     new(parent_id)
   end
@@ -104,5 +133,5 @@ class TestPartition
   end
 end
 
-class FailedPartition < TestPartition
+class FailedProxy < TestProxy
 end

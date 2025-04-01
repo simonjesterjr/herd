@@ -21,7 +21,12 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency "graphviz", "~> 1.4"
   spec.add_dependency "hiredis", "~> 0.6"
-  spec.add_dependency "redis", "~> 4.0"
+  spec.add_dependency "redis", "~> 5.0"
+  spec.add_dependency "redis-classy", "~> 2.0"
+  spec.add_dependency "concurrent-ruby", "~> 1.0"
+  spec.add_dependency "pg", "~> 1.5"
+  spec.add_dependency "activerecord", "~> 7.0"
+  spec.add_dependency "activerecord-postgresql-adapter", "~> 7.0"
   spec.add_dependency "oj", "~> 3.0"
 
   spec.add_development_dependency "bundler", "~> 2.0"

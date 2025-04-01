@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Herd
   class Runner
     attr_accessor :workflow_id, :incoming, :outgoing, :params,
@@ -149,7 +151,7 @@ module Herd
       end
 
       def current_timestamp
-        Time.current.utc.to_i
+        Time.now.utc.to_i
       end
 
       def assign_variables(opts)
@@ -168,9 +170,28 @@ module Herd
         @workflow       = opts[:workflow]
         @transaction_id = opts[:transaction_id]
         @worker_namespace = opts[:worker_namespace] ? "#{opts[:worker_namespace]}::" : ""
-        @proxy_namespace = opts[:proxy_namespace] || "Migration"
-        @proxy_class    = opts[:proxy_class] || "#{proxy_namespace}::#{klass.to_s.gsub( 'Eip::', '' ).gsub( 'Mart::', '' ).gsub( 'Scheduler::', '' ).gsub( @worker_namespace, '' ).gsub( 'Worker', '' )}"
+        @proxy_namespace = opts[:proxy_namespace] || "Herd"
+        @proxy_class    = opts[:proxy_class] || "Proxy"
         @args           = opts[:args] || []
       end
+
+    def self.enqueue!(job)
+      job.enqueued_at = current_timestamp
+      job.save
+    end
+
+    def self.perform!(job)
+      job.started_at = current_timestamp
+      job.save
+      job.perform
+      job.finished_at = current_timestamp
+      job.save
+    end
+
+    def self.fail!(job, error)
+      job.failed_at = current_timestamp
+      job.error = error
+      job.save
+    end
   end
 end
