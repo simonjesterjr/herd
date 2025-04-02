@@ -3,54 +3,43 @@
 module Herd
   module Models
     class Proxy < ActiveRecord::Base
+      self.table_name = 'proxies'
+      
       include Herd::Concerns::Trackable
 
       belongs_to :workflow, class_name: 'Herd::Models::Workflow'
       belongs_to :parent, class_name: 'Herd::Models::Proxy', optional: true
       has_many :children, class_name: 'Herd::Models::Proxy', foreign_key: 'parent_id'
 
-      enum status: {
-        partitioned: 0,
-        in_process: 1,
-        done: 2,
-        completed: 3,
-        errored: 4
-      }
+      enum :status, { pending: 0, running: 1, completed: 2, failed: 3 }, default: :pending
 
-      validates :status, presence: true
+      validates :name, presence: true
+      validates :job_class, presence: true
+      validates :job_id, presence: true
+      validates :workflow, presence: true
 
-      before_validation :set_default_status, on: :create
-
-      def partitioned!
-        update!(status: :partitioned)
-        add_note("Job partitioned", level: 'info')
+      def start!
+        if completed?
+          errors.add(:base, "Cannot start a completed proxy")
+          raise ActiveRecord::RecordInvalid.new(self)
+        end
+        update!(status: :running, started_at: Time.current)
       end
 
-      def in_process!
-        update!(status: :in_process)
-        add_note("Job started processing", level: 'info')
+      def finish!
+        update!(status: :completed, finished_at: Time.current)
       end
 
-      def done!
-        update!(status: :done)
-        add_note("Job completed", level: 'info')
+      def fail!
+        update!(status: :failed, finished_at: Time.current)
       end
 
-      def completed!
-        update!(status: :completed)
-        add_note("Job fully completed", level: 'info')
+      def duration
+        return nil unless started_at
+        (finished_at || Time.current) - started_at
       end
 
-      def errored!
-        update!(status: :errored)
-        add_note("Job encountered an error", level: 'error')
-      end
-
-      private
-
-      def set_default_status
-        self.status ||= :partitioned
-      end
     end
   end
+
 end 

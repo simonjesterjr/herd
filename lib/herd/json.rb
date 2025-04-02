@@ -1,14 +1,14 @@
 require 'oj'
 
 module Herd
-  class JSON
-    def self.encode(data)
-      Oj.dump(data, :mode => :rails)
+  module JSON
+    def self.dump(obj)
+      Oj.dump(obj, mode: :compat)
     end
 
-    def self.decode(data, options = {})
-      options.merge!( symbol_keys: true )
-      Oj.load(data, options)
+    def self.load(json)
+      return nil if json.nil?
+      Oj.load(json, mode: :compat)
     end
   end
 end

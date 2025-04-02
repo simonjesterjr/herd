@@ -5,7 +5,7 @@ module Herd
     class Tracking < ActiveRecord::Base
       belongs_to :trackable, polymorphic: true
 
-      validates :note, presence: true
+      validates :message, presence: true
       validates :level, inclusion: { in: %w[info warning error] }
 
       scope :info, -> { where(level: 'info') }
@@ -14,10 +14,10 @@ module Herd
       scope :recent, -> { order(created_at: :desc) }
       scope :for_trackable, ->(trackable) { where(trackable: trackable) }
 
-      def self.add_note(trackable, note, level: 'info', metadata: {})
+      def self.add_note(trackable, message, level: 'info', metadata: {})
         create!(
           trackable: trackable,
-          note: note,
+          message: message,
           level: level,
           metadata: metadata,
           created_at: Time.current

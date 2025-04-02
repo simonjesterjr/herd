@@ -6,11 +6,19 @@ module Herd
       extend ActiveSupport::Concern
 
       included do
-        has_many :trackings, as: :trackable, class_name: 'Herd::Models::Tracking', dependent: :destroy
+        has_many :trackings, as: :trackable, dependent: :destroy
+
+        scope :info_notes, -> { trackings.where(level: 'info').order(created_at: :desc) }
+        scope :warning_notes, -> { trackings.where(level: 'warning').order(created_at: :desc) }
+        scope :error_notes, -> { trackings.where(level: 'error').order(created_at: :desc) }
       end
 
-      def add_note(note, level: 'info', metadata: {})
-        Herd::Models::Tracking.add_note(self, note, level: level, metadata: metadata)
+      def add_note(message, level: 'info', metadata: {})
+        trackings.create!(
+          message: message,
+          level: level,
+          metadata: metadata
+        )
       end
 
       def notes
