@@ -84,13 +84,17 @@ class Herd::Client
   end
 
   def all_workflows
-    Models::Workflow.all.map do |workflow_model|
+    Herd::Models::Workflow.all.map do |workflow_model|
       find_workflow(workflow_model.id)
     end
   end
 
+  def all_proxies
+    Herd::Models::Proxy.all
+  end
+
   def find_workflow(id)
-    workflow_model = Models::Workflow.find_by(id: id)
+    workflow_model = Herd::Models::Workflow.find_by(id: id)
     raise ::Herd::WorkflowNotFound, "Workflow with given id ( #{id} ) doesn't exist" if workflow_model.nil?
 
     # Get job data from Redis
@@ -102,9 +106,21 @@ class Herd::Client
     workflow_from_hash(workflow_model.attributes.symbolize_keys, nodes)
   end
 
+  def find_proxy(id)
+    Herd::Models::Proxy.find_by(id: id)
+  end
+
+  def find_proxy_by_proxy_id(id)
+    Herd::Models::Proxy.find_by(id: id)
+  end
+
+  def find_proxy_by_job_id(job_id)
+    Herd::Models::Proxy.find_by(job_id: job_id)
+  end
+
   def persist_workflow(workflow)
     # Persist workflow state to PostgreSQL
-    workflow.model.update!(
+    workflow.update!(
       name: workflow.name,
       arguments: workflow.arguments,
       stopped: workflow.stopped,
@@ -114,9 +130,12 @@ class Herd::Client
 
     # Persist job data to Redis
     workflow.jobs.each { |job| persist_job(workflow.id, job) }
-    workflow.mark_as_persisted
 
     true
+  end
+
+  def persist_proxy(proxy)
+    proxy.save!
   end
 
   def persist_job(workflow_id, job)
@@ -140,10 +159,14 @@ class Herd::Client
 
   def destroy_workflow(workflow)
     # Delete workflow from PostgreSQL
-    workflow.model.destroy
+    workflow.destroy
 
     # Delete job data from Redis
     workflow.jobs.each { |job| destroy_job(workflow.id, job) }
+  end
+
+  def destroy_proxy(proxy)
+    proxy.destroy
   end
 
   def destroy_job(workflow_id, job)
@@ -198,8 +221,6 @@ class Herd::Client
     flow.jobs = nodes.map do |node|
       Herd::Runner.from_hash(node)
     end
-
-    flow.proxies = flow.jobs.map(&:proxy)
 
     flow
   end

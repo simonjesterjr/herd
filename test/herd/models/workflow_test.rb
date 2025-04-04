@@ -4,10 +4,8 @@ module Herd::Test
   class WorkflowTest < TestCase
     def setup
       super
-      @workflow = Herd::Models::Workflow.new(
-        name: 'test_workflow',
-        arguments: { 'key' => 'value' }
-      )
+      @workflow = Herd::Models::Workflow.new( name: 'test_workflow',
+                                              arguments: { 'key' => 'value' } )
     end
 
     def test_workflow_creation
@@ -17,7 +15,7 @@ module Herd::Test
       assert_nil @workflow.started_at
       assert_nil @workflow.finished_at
       assert_equal 'pending', @workflow.status
-      refute @workflow.stopped
+      refute @workflow.stopped?
     end
 
     def test_workflow_start
@@ -37,7 +35,7 @@ module Herd::Test
       assert_equal 'stopped', @workflow.status
       assert_not_nil @workflow.started_at
       assert_not_nil @workflow.finished_at
-      assert @workflow.stopped
+      assert @workflow.stopped?
     end
 
     def test_workflow_finish
@@ -48,7 +46,7 @@ module Herd::Test
       assert_equal 'completed', @workflow.status
       assert_not_nil @workflow.started_at
       assert_not_nil @workflow.finished_at
-      refute @workflow.stopped
+      refute @workflow.stopped?
     end
 
     def test_workflow_fail
@@ -59,7 +57,7 @@ module Herd::Test
       assert_equal 'failed', @workflow.status
       assert_not_nil @workflow.started_at
       assert_not_nil @workflow.finished_at
-      refute @workflow.stopped
+      refute @workflow.stopped?
     end
 
     def test_workflow_proxies_association
@@ -127,4 +125,5 @@ module Herd::Test
       assert @workflow.duration >= 0.1
     end
   end
+
 end 

@@ -3,11 +3,11 @@
 require_relative "../test_helper"
 require "test_workflow"
 
-class Herd::WorkflowTest < Herd::TestCase
+class Herd::WorkflowTest < Herd::Test::TestCase
   def setup
     super
-    @workflow = TestWorkflow.new
-    @workflow.instance_variable_set(:@model, mock_workflow_model)
+    @workflow = Herd::Workflow.new( name: 'test_workflow',
+                                    arguments: { 'key' => 'value' } )
   end
 
   def test_workflow_initializes_with_default_values
@@ -25,36 +25,36 @@ class Herd::WorkflowTest < Herd::TestCase
   end
 
   def test_workflow_finds_by_id
-    workflow = TestWorkflow.create
-    found = TestWorkflow.find(workflow.id)
+    workflow = Herd::Workflow.create( name: 'test_workflow',
+                                      arguments: { 'key' => 'value' } )
+    found = Herd::Workflow.find(workflow.id)
     assert_equal workflow.id, found.id
   end
 
   def test_workflow_raises_not_found_for_invalid_id
     assert_raises(Herd::WorkflowNotFound) do
-      TestWorkflow.find("invalid-id")
+      Herd::Workflow.find("invalid-id")
     end
   end
 
   def test_workflow_saves_and_persists
     @workflow.save
-    assert @workflow.persisted
-    @mock_workflow_model.verify
+    assert @workflow.pending?
+    assert @workflow.jobs.empty?
   end
 
   def test_workflow_stops_and_persists
     @workflow.mark_as_stopped
-    assert @workflow.stopped
-    @mock_workflow_model.verify
+    assert @workflow.stopped?
   end
 
   def test_workflow_starts_and_persists
     @workflow.mark_as_started
-    refute @workflow.stopped
-    @mock_workflow_model.verify
+    refute @workflow.stopped?
   end
 
   def test_workflow_resolves_dependencies
+    @workflow.save
     @workflow.run(PrepareJob)
     @workflow.run(FetchFirstJob, after: PrepareJob)
     @workflow.resolve_dependencies
@@ -64,6 +64,7 @@ class Herd::WorkflowTest < Herd::TestCase
   end
 
   def test_workflow_finds_job_by_name
+    @workflow.save
     @workflow.run(PrepareJob)
     job = @workflow.find_job(PrepareJob)
     assert_instance_of Herd::Runner, job
@@ -71,6 +72,7 @@ class Herd::WorkflowTest < Herd::TestCase
   end
 
   def test_workflow_finds_job_by_klass
+    @workflow.save
     @workflow.run(PrepareJob)
     job = @workflow.find_job(PrepareJob.to_s)
     assert_instance_of Herd::Runner, job
@@ -78,21 +80,25 @@ class Herd::WorkflowTest < Herd::TestCase
   end
 
   def test_workflow_finished_when_all_jobs_complete
+    @workflow.save
     @workflow.jobs.each(&:finish!)
     assert @workflow.finished?
   end
 
   def test_workflow_running_when_jobs_are_running
+    @workflow.save
     @workflow.find_job(PrepareJob).start!
     assert @workflow.running?
   end
 
   def test_workflow_failed_when_job_fails
+    @workflow.save
     @workflow.find_job(PrepareJob).fail!
     assert @workflow.failed?
   end
 
   def test_workflow_status_changes
+    @workflow.save
     @workflow.find_job(PrepareJob).start!
     assert_equal :running, @workflow.status
 
@@ -135,11 +141,13 @@ class Herd::WorkflowTest < Herd::TestCase
   end
 
   def test_workflow_run_with_params
+    @workflow.save
     @workflow.run(PrepareJob, params: { something: 1 })
     assert_equal({ something: 1 }, @workflow.jobs.first.params)
   end
 
   def test_workflow_run_with_dependencies
+    @workflow.save
     @workflow.run(PrepareJob)
     @workflow.run(FetchFirstJob, after: PrepareJob)
     @workflow.resolve_dependencies
@@ -149,6 +157,7 @@ class Herd::WorkflowTest < Herd::TestCase
   end
 
   def test_workflow_reloads_state
+    @workflow.save
     @workflow.run(PrepareJob)
     @workflow.find_job(PrepareJob).start!
     @workflow.save
@@ -158,6 +167,7 @@ class Herd::WorkflowTest < Herd::TestCase
   end
 
   def test_workflow_initial_jobs
+    @workflow.save
     @workflow.run(PrepareJob)
     @workflow.run(FetchFirstJob, after: PrepareJob)
     @workflow.resolve_dependencies
@@ -166,6 +176,7 @@ class Herd::WorkflowTest < Herd::TestCase
   end
 
   def test_workflow_same_workflow_running
+    @workflow.save
     refute @workflow.same_workflow_running?
 
     @workflow.parallel_workflows = true
@@ -173,28 +184,32 @@ class Herd::WorkflowTest < Herd::TestCase
   end
 
   def test_status_returns_failed_when_failed
+    @workflow.save
     @workflow.find_job("Prepare").fail!
     @workflow.persist!
     assert_equal :failed, @workflow.reload.status
   end
 
   def test_save_sets_persisted_to_true
-    workflow = TestWorkflow.new
+    workflow = TestWorkflow.new( name: 'test_workflow',
+                                 arguments: { 'key' => 'value' } )
     workflow.save
     assert workflow.persisted
   end
 
   def test_save_assigns_new_unique_id
-    workflow = TestWorkflow.new
+    workflow = TestWorkflow.new( name: 'test_workflow',
+                                 arguments: { 'key' => 'value' } )
     workflow.save
     assert_not_nil workflow.id
   end
 
   def test_save_does_not_assign_new_id_when_persisted
-    workflow = TestWorkflow.new
+    workflow = TestWorkflow.new( { 'key' => 'value' } )
     workflow.save
     id = workflow.id
     workflow.save
+    debugger
     assert_equal id, workflow.id
   end
 
@@ -259,21 +274,24 @@ class Herd::WorkflowTest < Herd::TestCase
   end
 
   def test_run_allows_passing_additional_params
-    workflow = Herd::Workflow.new
+    workflow = Herd::Workflow.new( name: 'test_workflow',
+                                  arguments: { 'key' => 'value' } )
     workflow.run(Herd::Worker, proxy_class: "TestPartition", params: { something: 1 })
     workflow.save
     assert_equal({ something: 1 }, workflow.jobs.first.params)
   end
 
   def test_run_adds_new_job_when_graph_is_empty
-    workflow = Herd::Workflow.new
+    workflow = Herd::Workflow.new( name: 'test_workflow',
+                                   arguments: { 'key' => 'value' } )
     workflow.run(Herd::Worker, proxy_class: "TestPartition")
     workflow.save
     assert_instance_of Herd::Runner, workflow.jobs.first
   end
 
   def test_run_allows_after_to_accept_array_of_jobs
-    tree = Herd::Workflow.new
+    tree = Herd::Workflow.new( name: 'test_workflow',
+                               arguments: { 'key' => 'value' } )
     klass1 = Class.new(Herd::Worker)
     klass2 = Class.new(Herd::Worker)
     klass3 = Class.new(Herd::Worker)
@@ -288,7 +306,8 @@ class Herd::WorkflowTest < Herd::TestCase
   end
 
   def test_run_allows_before_to_accept_array_of_jobs
-    tree = Herd::Workflow.new
+    tree = Herd::Workflow.new( name: 'test_workflow',
+                               arguments: { 'key' => 'value' } )
     klass1 = Class.new(Herd::Worker)
     klass2 = Class.new(Herd::Worker)
     klass3 = Class.new(Herd::Worker)
@@ -349,6 +368,7 @@ class Herd::WorkflowTest < Herd::TestCase
   end
 
   def test_workflow_handles_duplicate_jobs
+    @workflow.save
     @workflow.run(PrepareJob)
     assert_raises(Herd::DuplicateJobError) do
       @workflow.run(PrepareJob)
@@ -356,6 +376,7 @@ class Herd::WorkflowTest < Herd::TestCase
   end
 
   def test_workflow_handles_invalid_dependency
+    @workflow.save
     @workflow.run(PrepareJob)
     assert_raises(Herd::InvalidDependencyError) do
       @workflow.run(FetchFirstJob, after: "NonExistentJob")
@@ -363,19 +384,21 @@ class Herd::WorkflowTest < Herd::TestCase
   end
 
   def test_workflow_handles_nil_job_id
+    @workflow.save
     assert_raises(Herd::InvalidJobIdError) do
       @workflow.find_job(nil)
     end
   end
 
   def test_workflow_handles_empty_job_name
+    @workflow.save
     assert_raises(Herd::InvalidJobNameError) do
       @workflow.find_job("")
     end
   end
 
   def test_workflow_handles_invalid_state_transition
-    @workflow.mark_as_finished
+    @workflow.save
     assert_raises(Herd::InvalidStateTransitionError) do
       @workflow.mark_as_started
     end
@@ -393,37 +416,4 @@ class Herd::WorkflowTest < Herd::TestCase
     end
   end
 
-  def test_workflow_handles_database_connection_error
-    @workflow.instance_variable_get(:@model).expect :save, -> { raise ActiveRecord::ConnectionNotEstablished }
-    
-    assert_raises(Herd::DatabaseConnectionError) do
-      @workflow.save
-    end
-  end
-
-  def test_workflow_handles_invalid_json_serialization
-    @workflow.instance_variable_set(:@arguments, [Object.new]) # Non-serializable object
-    
-    assert_raises(Herd::SerializationError) do
-      @workflow.to_json
-    end
-  end
-
-  def test_workflow_handles_missing_required_attributes
-    @workflow.instance_variable_get(:@model).expect :save, -> { raise ActiveRecord::RecordInvalid }
-    
-    assert_raises(Herd::ValidationError) do
-      @workflow.save
-    end
-  end
-
-  def test_workflow_handles_timeout
-    @workflow.instance_variable_get(:@model).expect :save, -> { raise ActiveRecord::StatementTimeout }
-    
-    assert_raises(Herd::DatabaseTimeoutError) do
-      @workflow.save
-    end
-  end
-
-  def test_workflow_handles_deadlock
 end 

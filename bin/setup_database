@@ -1,0 +1,84 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'active_record'
+require 'pg'
+
+# Helper method to check if database exists
+def database_exists?(database_name)
+  ActiveRecord::Base.connection.execute(
+    "SELECT 1 FROM pg_database WHERE datname = '#{database_name}'"
+  ).any?
+end
+
+# Database configuration
+config = {
+  adapter: 'postgresql',
+  host: 'localhost',
+  port: 5432,
+  username: ENV.fetch('HERD_DB_USER', 'denaliai'),
+  password: ENV.fetch('HERD_DB_PWD', 'denaliai'),
+  database: 'postgres'  # Connect to default postgres database first
+}
+
+# Connect to PostgreSQL
+ActiveRecord::Base.establish_connection(config)
+
+# Create test database if it doesn't exist
+db_name = 'herd_testing'
+unless database_exists?(db_name)
+  ActiveRecord::Base.connection.create_database(db_name)
+  puts "Created database: #{db_name}"
+else
+  puts "Database already exists: #{db_name}"
+end
+
+# Connect to the test database
+test_config = config.merge(database: db_name)
+ActiveRecord::Base.establish_connection(test_config)
+
+# Create schema_migrations table
+ActiveRecord::Base.connection.execute(<<-SQL)
+  CREATE TABLE IF NOT EXISTS schema_migrations (
+    version character varying NOT NULL,
+    CONSTRAINT unique_schema_migrations UNIQUE (version)
+  );
+SQL
+puts "Created schema_migrations table"
+
+# Run migration scripts
+migration_dir = File.expand_path('../../lib/herd/migrations', __FILE__)
+migration_files = Dir.glob(File.join(migration_dir, '*.rb')).sort
+
+migration_files.each do |file|
+  begin
+    # Extract version from filename
+    version = File.basename(file).split('_').first
+    
+    # Load the migration file
+    load file
+    
+    # Extract the class name from the file content
+    file_content = File.read(file)
+    class_name_match = file_content.match(/class\s+(\w+)\s+</)
+    if class_name_match
+      migration_class = class_name_match[1]
+      migration = Object.const_get(migration_class)
+      migration.new.change
+      
+      # Record migration in schema_migrations
+      ActiveRecord::Base.connection.execute(
+        "INSERT INTO schema_migrations (version) VALUES ('#{version}')"
+      )
+      
+      puts "Ran migration: #{File.basename(file)}"
+    else
+      puts "Could not find class name in migration file: #{file}"
+    end
+  rescue => e
+    puts "Error running migration #{file}: #{e.message}"
+    puts e.backtrace
+  end
+end
+
+puts "Database setup complete!" 

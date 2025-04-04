@@ -20,6 +20,7 @@ $LOAD_PATH.unshift File.expand_path("../../lib", __FILE__)
 # Require all internal Herd files
 require "herd/concerns/trackable"
 require "herd/configuration"
+require "herd/configuration_error"
 require "herd/client"
 require "herd/runner"
 require "herd/graph"
@@ -30,6 +31,8 @@ require "herd/database_setup"
 require "herd/models/workflow"
 require "herd/models/proxy"
 require "herd/models/tracking"
+require "herd/workflow_not_found"
+require "herd/invalid_job_id_error"
 
 require "herd"
 
@@ -140,24 +143,19 @@ module ArrayWrapping
 end
 
 # Test partition classes
-class TestProxy < Herd::Proxy
+class TestProxy < Herd::Models::Proxy
   def self.create(parent_id: nil)
-    new(parent_id)
-  end
-
-  def initialize(parent_id = nil)
-    @id = SecureRandom.uuid
-    @parent_id = parent_id
-  end
-
-  def id
-    @id
-  end
-
-  def parent_id
-    @parent_id
+    create!(
+      id: SecureRandom.uuid,
+      parent_id: parent_id,
+      name: "TestProxy",
+      job_class: "TestProxy",
+      job_id: "job_#{rand(1000000)}",
+      workflow: "TestWorkflow"
+    )
   end
 end
 
 class FailedProxy < TestProxy
 end
+

@@ -1,0 +1,65 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'irb'
+require 'active_record'
+require 'pg'
+require 'oj'
+require 'redis'
+require 'sidekiq'
+require 'graphviz'
+require 'concurrent-ruby'
+require 'securerandom'
+
+# Add the lib directory to the load path
+$LOAD_PATH.unshift File.expand_path('../../lib', __FILE__)
+
+# Require all internal Herd files
+require 'herd/concerns/trackable'
+require 'herd/configuration'
+require 'herd/configuration_error'
+require 'herd/client'
+require 'herd/runner'
+require 'herd/graph'
+require 'herd/worker'
+require 'herd/workflow'
+require 'herd/json'
+require 'herd/database_setup'
+require 'herd/models/workflow'
+require 'herd/models/proxy'
+require 'herd/models/tracking'
+require 'herd/workflow_not_found'
+require 'herd/invalid_job_id_error'
+require 'herd'
+
+# Configure the application
+Herd.configure do |config|
+  config.redis_url = ENV.fetch('HERD_REDIS_URL', 'redis://localhost:6379/1')
+  config.herdfile = ENV.fetch('HERD_HERDFILE', 'Herdfile')
+  config.database = {
+    adapter: 'postgresql',
+    host: ENV.fetch('HERD_DB_HOST', 'localhost'),
+    port: ENV.fetch('HERD_DB_PORT', 5432).to_i,
+    database: ENV.fetch('HERD_DB_NAME', 'herd_testing'),
+    username: ENV.fetch('HERD_DB_USER', 'denaliai'),
+    password: ENV.fetch('HERD_DB_PWD', 'denaliai'),
+    pool: ENV.fetch('HERD_DB_POOL', 5).to_i,
+    timeout: ENV.fetch('HERD_DB_TIMEOUT', 5000).to_i,
+    schema_search_path: ENV.fetch('HERD_DB_SCHEMA', 'public')
+  }
+end
+
+# Set up the database connection
+Herd::DatabaseConfig.configure(Herd.configuration.database)
+
+# Set up Redis connection
+Herd::Client.redis_connection
+
+# Print welcome message
+puts "Herd Console"
+puts "============"
+puts "Type 'exit' or 'quit' to exit the console"
+puts ""
+
+# Start the IRB session
+IRB.start 

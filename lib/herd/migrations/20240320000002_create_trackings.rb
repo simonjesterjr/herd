@@ -1,7 +1,8 @@
 class CreateTrackings < ActiveRecord::Migration[7.1]
   def change
     create_table :trackings do |t|
-      t.references :trackable, polymorphic: true, null: false
+      t.uuid :trackable_id, null: false
+      t.string :trackable_type, null: false
       t.string :level, null: false, default: 'info'
       t.text :message, null: false
       t.jsonb :metadata, default: {}

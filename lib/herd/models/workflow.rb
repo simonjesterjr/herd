@@ -20,7 +20,7 @@ module Herd
       end
 
       def stop!
-        update!(status: :stopped, finished_at: Time.current, stopped: true)
+        update!( status: :stopped, finished_at: Time.current )
         add_note("Workflow stopped", level: 'warning')
       end
 
@@ -38,6 +38,7 @@ module Herd
         return nil unless started_at
         (finished_at || Time.current) - started_at
       end
+
     end
   end
 

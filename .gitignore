@@ -86,3 +86,6 @@ yarn-debug.log*
 /storage/*
 !/storage/.keep
 /public/uploads
+
+lib/.DS_Store
+lib/herd/.DS_Store

@@ -1,4 +1,6 @@
 # frozen_string_literal: true
+require "test_helper"
+require "test_workflow"
 
 module Herd
   module Test
@@ -11,14 +13,17 @@ module Herd
       end
 
       def test_proxy_adds_note_on_state_change
-        proxy = Herd::Proxy.new(workflow_id: "test")
+        proxy = Herd::Models::Proxy.new(workflow_id: "test")
         proxy.in_process!
         assert_equal "Job started processing", proxy.notes.first.note
         assert_equal "info", proxy.notes.first.level
       end
 
       def test_add_note_with_metadata
-        workflow = TestWorkflow.new
+        workflow = TestWorkflow.new( name: 'test_workflow',
+                                     arguments: { 'key' => 'value' } )
+        workflow.save!
+
         workflow.add_note("Test note", metadata: { key: "value" })
         note = workflow.notes.first
         assert_equal "Test note", note.note
@@ -26,7 +31,11 @@ module Herd
       end
 
       def test_add_note_with_different_levels
-        workflow = TestWorkflow.new
+        workflow = TestWorkflow.new( name: 'test_workflow',
+                                     arguments: { 'key' => 'value' } )
+        workflow.save! 
+        # debugger
+
         workflow.add_note("Info note", level: "info")
         workflow.add_note("Warning note", level: "warning")
         workflow.add_note("Error note", level: "error")

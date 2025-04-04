@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-class Herd::ConfigurationTest < Herd::TestCase
+class Herd::ConfigurationTest < Herd::Test::TestCase
   def setup
     super
     @config = Herd::Configuration.new
@@ -32,7 +32,7 @@ class Herd::ConfigurationTest < Herd::TestCase
     )
     
     assert_equal "redis://localhost:6379/1", config.redis_url
-    assert_equal "postgresql://localhost:5432/herd", config.database_url
+    assert_equal "postgresql://localhost:5432/herd", config.database
     assert_equal :debug, config.log_level
     assert_equal 60, config.job_timeout
     assert_equal 10, config.max_retries
@@ -115,7 +115,7 @@ class Herd::ConfigurationTest < Herd::TestCase
     )
 
     assert_equal "redis://localhost:6379/1", config.redis_url
-    assert_equal "postgresql://localhost:5432/herd", config.database_url
+    assert_equal "postgresql://localhost:5432/herd", config.database
     assert_equal :debug, config.log_level
     assert_equal 30, config.job_timeout # Default value
     assert_equal 5, config.max_retries # Default value
@@ -160,7 +160,7 @@ class Herd::ConfigurationTest < Herd::TestCase
     )
 
     assert_equal "redis://localhost:6379/1", config.redis_url
-    assert_equal "postgresql://localhost:5432/herd_test", config.database_url
+    assert_equal "postgresql://localhost:5432/herd_test", config.database
   end
 
   def test_configuration_development_specific
@@ -170,7 +170,7 @@ class Herd::ConfigurationTest < Herd::TestCase
     )
 
     assert_equal "redis://localhost:6379/1", config.redis_url
-    assert_equal "postgresql://localhost:5432/herd_development", config.database_url
+    assert_equal "postgresql://localhost:5432/herd_development", config.database
   end
 
   def test_configuration_production_specific
@@ -180,7 +180,7 @@ class Herd::ConfigurationTest < Herd::TestCase
     )
 
     assert_equal "redis://redis.production:6379/1", config.redis_url
-    assert_equal "postgresql://db.production:5432/herd_production", config.database_url
+    assert_equal "postgresql://db.production:5432/herd_production", config.database
   end
 
   def test_has_defaults_set

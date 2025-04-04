@@ -9,7 +9,7 @@ class ParameterTestWorkflow < Herd::Workflow
   end
 end
 
-class Herd::ClientTest < Herd::TestCase
+class Herd::Test::ClientTest < Herd::Test::TestCase
   def setup
     super
     @client = Herd::Client.new(Herd::Configuration.new(
