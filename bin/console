@@ -14,22 +14,7 @@ require 'securerandom'
 # Add the lib directory to the load path
 $LOAD_PATH.unshift File.expand_path('../../lib', __FILE__)
 
-# Require all internal Herd files
-require 'herd/concerns/trackable'
-require 'herd/configuration'
-require 'herd/configuration_error'
-require 'herd/client'
-require 'herd/runner'
-require 'herd/graph'
-require 'herd/worker'
-require 'herd/workflow'
-require 'herd/json'
-require 'herd/database_setup'
-require 'herd/models/workflow'
-require 'herd/models/proxy'
-require 'herd/models/tracking'
-require 'herd/workflow_not_found'
-require 'herd/invalid_job_id_error'
+# Require the main Herd file first
 require 'herd'
 
 # Configure the application

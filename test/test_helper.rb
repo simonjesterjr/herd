@@ -17,24 +17,30 @@ require_relative "support/database_helper"
 # Add the lib directory to the load path
 $LOAD_PATH.unshift File.expand_path("../../lib", __FILE__)
 
+# Require the main Herd file first
+require "herd"
+
 # Require all internal Herd files
 require "herd/concerns/trackable"
 require "herd/configuration"
 require "herd/configuration_error"
+require "herd/json"
+require "herd/database_setup"
+require "herd/database_config"
+require "herd/workflow_not_found"
+require "herd/invalid_job_id_error"
+require "herd/dependency_level_too_deep"
+require "herd/invalid_dependency_error"
+require "herd/duplicate_job_error"
+require "herd/same_workflow_running"
 require "herd/client"
 require "herd/runner"
 require "herd/graph"
 require "herd/worker"
 require "herd/workflow"
-require "herd/json"
-require "herd/database_setup"
 require "herd/models/workflow"
 require "herd/models/proxy"
 require "herd/models/tracking"
-require "herd/workflow_not_found"
-require "herd/invalid_job_id_error"
-
-require "herd"
 
 # Configure test environment
 Herd.configure do |config|

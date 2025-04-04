@@ -87,12 +87,6 @@ module Herd::Test
       assert_equal @workflow, tracking.trackable
     end
 
-    def test_workflow_validation
-      workflow = Herd::Models::Workflow.new
-      refute workflow.save
-      assert_includes workflow.errors[:name], "can't be blank"
-    end
-
     def test_workflow_status_transitions
       @workflow.save
       

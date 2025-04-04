@@ -123,7 +123,7 @@ class Herd::Client
     workflow.update!(
       name: workflow.name,
       arguments: workflow.arguments,
-      stopped: workflow.stopped,
+      status: 'stopped',
       started_at: workflow.started_at,
       finished_at: workflow.finished_at
     )
@@ -215,7 +215,7 @@ class Herd::Client
     flow = Object.const_get(hash[:name]).new(*hash[:arguments])
     flow.jobs = []
     flow.proxies = []
-    flow.stopped = hash.fetch(:stopped, false)
+    flow.status = hash.fetch( :status, :pending )
     flow.id = hash[:id]
 
     flow.jobs = nodes.map do |node|

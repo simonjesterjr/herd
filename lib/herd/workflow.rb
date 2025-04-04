@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'securerandom'
-require 'herd/models/workflow'
 
 module Herd
   class Workflow < Herd::Models::Workflow
@@ -11,8 +10,7 @@ module Herd
       super(
         id: SecureRandom.uuid,
         name: self.class.name,
-        arguments: args,
-        stopped: false
+        arguments: args
       )
       @jobs = []
       @proxies = []
@@ -75,7 +73,6 @@ module Herd
 
     def mark_as_started
       self.stopped = false
-      update!(stopped: false)
       add_note("Workflow started", level: 'info')
     end
 

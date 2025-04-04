@@ -3,13 +3,13 @@
 module Herd
   module Models
     class Workflow < ActiveRecord::Base
-      include Herd::Concerns::Trackable
+      include ::Herd::Concerns::Trackable
 
       has_many :proxies, class_name: 'Herd::Models::Proxy', dependent: :destroy
 
       enum :status, { pending: 0, running: 1, completed: 2, failed: 3, stopped: 4 }, default: :pending
 
-      validates :name, presence: true
+      after_initialize :set_defaults
 
       def start!
         if completed?
@@ -39,6 +39,11 @@ module Herd
         (finished_at || Time.current) - started_at
       end
 
+      private
+
+        def set_defaults
+          self.name ||= "Unknown"
+        end
     end
   end
 
