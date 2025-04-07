@@ -38,7 +38,7 @@ module Herd
     def start!
       @started_at = current_timestamp
       @failed_at = nil
-      proxy.in_process!
+      proxy.start!
     end
 
     def enqueue!

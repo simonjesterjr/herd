@@ -44,11 +44,13 @@ class Herd::WorkflowTest < Herd::Test::TestCase
   end
 
   def test_workflow_stops_and_persists
+    @workflow.save
     @workflow.mark_as_stopped
     assert @workflow.stopped?
   end
 
   def test_workflow_starts_and_persists
+    @workflow.save
     @workflow.mark_as_started
     refute @workflow.stopped?
   end
@@ -98,16 +100,16 @@ class Herd::WorkflowTest < Herd::Test::TestCase
   end
 
   def test_workflow_status_changes
-    @workflow.save
-    @workflow.find_job(PrepareJob).start!
+    workflow = TestWorkflow.create
+    workflow.find_job(PrepareJob).start!
     assert_equal :running, @workflow.status
 
-    @workflow.find_job(PrepareJob).finish!
-    @workflow.find_job(FetchFirstJob).finish!
-    @workflow.find_job(FetchSecondJob).finish!
-    @workflow.find_job(NormalizeJob).finish!
-    @workflow.find_job(PersistFirstJob).finish!
-    assert_equal :finished, @workflow.status
+    workflow.find_job(PrepareJob).finish!
+    workflow.find_job(FetchFirstJob).finish!
+    workflow.find_job(FetchSecondJob).finish!
+    workflow.find_job(NormalizeJob).finish!
+    workflow.find_job(PersistFirstJob).finish!
+    assert_equal :finished, workflow.status
   end
 
   def test_workflow_to_json_returns_correct_hash
@@ -135,6 +137,7 @@ class Herd::WorkflowTest < Herd::Test::TestCase
   end
 
   def test_workflow_run_adds_new_job
+    @workflow.save
     @workflow.run(PrepareJob)
     assert_instance_of Herd::Runner, @workflow.jobs.first
     assert_equal PrepareJob, @workflow.jobs.first.klass
@@ -152,8 +155,8 @@ class Herd::WorkflowTest < Herd::Test::TestCase
     @workflow.run(FetchFirstJob, after: PrepareJob)
     @workflow.resolve_dependencies
 
-    assert_includes @workflow.jobs.first.outgoing, FetchFirstJob.to_s
-    assert_includes @workflow.jobs.last.incoming, PrepareJob.to_s
+    assert @workflow.jobs.first.outgoing.any? { |job| job.start_with?("FetchFirstJob") }
+    assert @workflow.jobs.last.incoming.any? { |job| job.start_with?("PrepareJob") }
   end
 
   def test_workflow_reloads_state
@@ -185,7 +188,7 @@ class Herd::WorkflowTest < Herd::Test::TestCase
 
   def test_status_returns_failed_when_failed
     @workflow.save
-    @workflow.find_job("Prepare").fail!
+    @workflow.find_job("PrepareJob").fail!
     @workflow.persist!
     assert_equal :failed, @workflow.reload.status
   end
@@ -214,16 +217,19 @@ class Herd::WorkflowTest < Herd::Test::TestCase
   end
 
   def test_continue_enqueues_failed_jobs
-    @workflow.find_job("Prepare").fail!
+    @workflow.save
+    @workflow.run(PrepareJob)
+    @workflow.find_job(PrepareJob).fail!
     assert_not_empty @workflow.jobs.select(&:failed?)
 
     @workflow.continue
 
     assert_empty @workflow.jobs.select(&:failed?)
-    assert_nil @workflow.find_job("Prepare").failed_at
+    assert_nil @workflow.find_job(PrepareJob).failed_at
   end
 
   def test_mark_as_stopped_marks_workflow_as_stopped
+    @workflow.save
     assert_change true do
       @workflow.mark_as_stopped
       @workflow.stopped?
@@ -231,7 +237,7 @@ class Herd::WorkflowTest < Herd::Test::TestCase
   end
 
   def test_mark_as_started_removes_stopped_flag
-    @workflow.stopped = true
+    @workflow.status = :stopped
     assert_change false do
       @workflow.mark_as_started
       @workflow.stopped?
@@ -270,7 +276,9 @@ class Herd::WorkflowTest < Herd::Test::TestCase
   end
 
   def test_find_job_finds_job_runner_by_name
-    assert_instance_of Herd::Runner, @workflow.find_job("PersistFirstJob")
+    @workflow.save
+    @workflow.run(PrepareJob)
+    assert_instance_of Herd::Runner, @workflow.find_job(PrepareJob)
   end
 
   def test_run_allows_passing_additional_params
@@ -322,7 +330,9 @@ class Herd::WorkflowTest < Herd::Test::TestCase
   end
 
   def test_failed_returns_true_when_job_failed
-    @workflow.find_job("Prepare").fail!
+    @workflow.save
+    @workflow.run(PrepareJob)
+    @workflow.find_job(PrepareJob).fail!
     assert @workflow.failed?
   end
 
@@ -339,14 +349,22 @@ class Herd::WorkflowTest < Herd::Test::TestCase
   end
 
   def test_status_changes_to_finished_when_all_jobs_complete
-    @workflow.find_job("Prepare").finish!
-    @workflow.find_job("NormalizeJob").finish!
-    @workflow.find_job("FetchFirstJob").finish!
+    @workflow.save
+    @workflow.run(PrepareJob)
+    @workflow.run(NormalizeJob)
+    @workflow.run(FetchFirstJob)
+    @workflow.run(FetchSecondJob)
+    @workflow.run(PersistFirstJob)
+    @workflow.persist!
+
+    @workflow.find_job(PrepareJob).finish!
+    @workflow.find_job(NormalizeJob).finish!
+    @workflow.find_job(FetchFirstJob).finish!
     @workflow.persist!
     assert_equal :running, @workflow.reload.status
 
-    @workflow.find_job("FetchSecondJob").finish!
-    @workflow.find_job("PersistFirstJob").finish!
+    @workflow.find_job(FetchSecondJob).finish!
+    @workflow.find_job(PersistFirstJob).finish!
     @workflow.persist!
     assert_equal :finished, @workflow.reload.status
   end
@@ -363,7 +381,7 @@ class Herd::WorkflowTest < Herd::Test::TestCase
 
   def test_workflow_handles_invalid_job_class
     assert_raises(Herd::InvalidJobClassError) do
-      @workflow.run("InvalidJob")
+      @workflow.run(InvalidJob)
     end
   end
 
@@ -385,7 +403,7 @@ class Herd::WorkflowTest < Herd::Test::TestCase
 
   def test_workflow_handles_nil_job_id
     @workflow.save
-    assert_raises(Herd::InvalidJobIdError) do
+    assert_raises(Herd::InvalidJobNameError) do
       @workflow.find_job(nil)
     end
   end
@@ -405,8 +423,8 @@ class Herd::WorkflowTest < Herd::Test::TestCase
   end
 
   def test_workflow_handles_concurrent_modification
-    @workflow.run(PrepareJob)
     @workflow.save
+    @workflow.run(PrepareJob)
     
     # Simulate concurrent modification
     @workflow.instance_variable_get(:@model).expect :save, false

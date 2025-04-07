@@ -54,8 +54,7 @@ module Herd
     def configure(*args); end
 
     def mark_as_stopped
-      self.stopped = true
-      update!(stopped: true)
+      update!( status: :stopped )
       add_note("Workflow stopped", level: 'warning')
     end
 
@@ -72,7 +71,7 @@ module Herd
     end
 
     def mark_as_started
-      self.stopped = false
+      update!( status: :running )
       add_note("Workflow started", level: 'info')
     end
 
@@ -97,7 +96,7 @@ module Herd
     end
 
     def find_job(name)
-      raise Herd::InvalidJobIdError, "Job #{name} not found" if name.blank?
+      raise Herd::InvalidJobNameError, "Job #{name} not found" if name.blank?
 
       match_data = /(?<klass>\w*[^-])-(?<identifier>.*)/.match(name.to_s)
       result = if match_data.nil?
@@ -128,7 +127,7 @@ module Herd
     end
 
     def stopped?
-      stopped || status == :stopped
+      ( status == :stopped && !jobs.any?(&:running?) ) || failed?
     end
 
     def run(klass, opts = {})
@@ -145,8 +144,12 @@ module Herd
           skip: opts[:skip] || false
         }
       )
-      jobs << node
-      proxies << node.proxy
+      if jobs.any? { |job| job == node }
+        raise Herd::DuplicateJobError, "Job #{klass} already exists"
+      else
+        jobs << node
+        proxies << node.proxy
+      end 
 
       deps_after = [*opts[:after]]
       deps_after.each do |dep|
@@ -199,20 +202,6 @@ module Herd
 
     def initial_jobs
       jobs.select(&:has_no_dependencies?)
-    end
-
-    def status
-      if failed?
-        :failed
-      elsif running?
-        :running
-      elsif finished?
-        :finished
-      elsif stopped?
-        :stopped
-      else
-        :running
-      end
     end
 
     def started_at
