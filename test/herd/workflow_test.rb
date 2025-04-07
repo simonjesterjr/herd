@@ -89,12 +89,14 @@ class Herd::WorkflowTest < Herd::Test::TestCase
 
   def test_workflow_running_when_jobs_are_running
     @workflow.save
+    @workflow.run(PrepareJob)
     @workflow.find_job(PrepareJob).start!
     assert @workflow.running?
   end
 
   def test_workflow_failed_when_job_fails
     @workflow.save
+    @workflow.run(PrepareJob)
     @workflow.find_job(PrepareJob).fail!
     assert @workflow.failed?
   end
@@ -284,7 +286,7 @@ class Herd::WorkflowTest < Herd::Test::TestCase
   def test_run_allows_passing_additional_params
     workflow = Herd::Workflow.new( name: 'test_workflow',
                                   arguments: { 'key' => 'value' } )
-    workflow.run(Herd::Worker, proxy_class: "TestPartition", params: { something: 1 })
+    workflow.run(Herd::Worker, proxy_class: "TestProxy", params: { something: 1 })
     workflow.save
     assert_equal({ something: 1 }, workflow.jobs.first.params)
   end
@@ -292,7 +294,7 @@ class Herd::WorkflowTest < Herd::Test::TestCase
   def test_run_adds_new_job_when_graph_is_empty
     workflow = Herd::Workflow.new( name: 'test_workflow',
                                    arguments: { 'key' => 'value' } )
-    workflow.run(Herd::Worker, proxy_class: "TestPartition")
+    workflow.run(Herd::Worker, proxy_class: "TestProxy")
     workflow.save
     assert_instance_of Herd::Runner, workflow.jobs.first
   end
@@ -300,13 +302,14 @@ class Herd::WorkflowTest < Herd::Test::TestCase
   def test_run_allows_after_to_accept_array_of_jobs
     tree = Herd::Workflow.new( name: 'test_workflow',
                                arguments: { 'key' => 'value' } )
+    tree.save
     klass1 = Class.new(Herd::Worker)
     klass2 = Class.new(Herd::Worker)
     klass3 = Class.new(Herd::Worker)
 
-    tree.run(klass1, proxy_class: "TestPartition")
-    tree.run(klass2, proxy_class: "TestPartition", after: [klass1, klass3])
-    tree.run(klass3, proxy_class: "TestPartition")
+    tree.run(klass1, proxy_class: "TestProxy")
+    tree.run(klass2, proxy_class: "TestProxy", after: [klass1, klass3])
+    tree.run(klass3, proxy_class: "TestProxy")
 
     tree.resolve_dependencies
 
@@ -315,14 +318,16 @@ class Herd::WorkflowTest < Herd::Test::TestCase
 
   def test_run_allows_before_to_accept_array_of_jobs
     tree = Herd::Workflow.new( name: 'test_workflow',
-                               arguments: { 'key' => 'value' } )
+                               arguments: { 'key' => 'value' } )                           
+    tree.save
+
     klass1 = Class.new(Herd::Worker)
     klass2 = Class.new(Herd::Worker)
     klass3 = Class.new(Herd::Worker)
 
-    tree.run(klass1, proxy_class: "TestPartition")
-    tree.run(klass2, proxy_class: "TestPartition", before: [klass1, klass3])
-    tree.run(klass3, proxy_class: "TestPartition")
+    tree.run(klass1, proxy_class: "TestProxy")
+    tree.run(klass2, proxy_class: "TestProxy", before: [klass1, klass3])
+    tree.run(klass3, proxy_class: "TestProxy")
 
     tree.resolve_dependencies
 
@@ -380,6 +385,7 @@ class Herd::WorkflowTest < Herd::Test::TestCase
   end
 
   def test_workflow_handles_invalid_job_class
+    @workflow.save
     assert_raises(Herd::InvalidJobClassError) do
       @workflow.run(InvalidJob)
     end
@@ -415,9 +421,18 @@ class Herd::WorkflowTest < Herd::Test::TestCase
     end
   end
 
+  def test_workflow_handles_invalid_workflow_configuration
+    @workflow.save
+    assert_raises(Herd::InvalidWorkflowConfigurationError) do
+      @workflow.mark_as_started
+    end
+  end
+
   def test_workflow_handles_invalid_state_transition
     @workflow.save
-    assert_raises(Herd::InvalidStateTransitionError) do
+    @workflow.run(PrepareJob)
+    @workflow.mark_as_started
+    assert_raises(Herd::InvalidWorkflowStateError) do
       @workflow.mark_as_started
     end
   end

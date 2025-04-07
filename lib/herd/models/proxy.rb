@@ -39,6 +39,10 @@ module Herd
         (finished_at || Time.current) - started_at
       end
 
+      def in_process?
+        running?
+      end
+
     end
   end
 

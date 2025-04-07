@@ -60,7 +60,7 @@ module Herd
 
     def fail!
       @finished_at = @failed_at = current_timestamp
-      proxy.errored!
+      proxy.failed!
     end
 
     def enqueued?

@@ -71,7 +71,10 @@ module Herd
     end
 
     def mark_as_started
-      update!( status: :running )
+      raise Herd::InvalidWorkflowStateError, "Workflow already started" if running?
+      raise Herd::InvalidWorkflowConfigurationError, "Workflow has no jobs" if jobs.empty?
+
+      update!( status: :running, started_at: Time.now.utc )
       add_note("Workflow started", level: 'info')
     end
 
@@ -119,7 +122,7 @@ module Herd
 
     def running?
       jobs_result = jobs.any?(&:running?)
-      started? && !finished?
+      (started? && !finished?) || jobs_result
     end
 
     def failed?
@@ -131,6 +134,8 @@ module Herd
     end
 
     def run(klass, opts = {})
+      raise Herd::InvalidJobClassError, "Job class #{klass} not found" unless klass.is_a?(Class)
+
       node = Herd::Runner.new(
         {
           klass: klass,
